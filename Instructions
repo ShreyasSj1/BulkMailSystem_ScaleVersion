@@ -1,0 +1,7 @@
+Create three terminal windows
+
+On first terminal RUN : npm start
+On second terminal RUN : npm run worker
+On third terminal RUN : curl -X POST http://localhost:5000/api/email/send -H "Content-Type: application/json" -d 
+                        '{"emails":["vanshg917@gmail.com","shreyassj553@gmail.com"],"subject":"Test Bulk Email",
+                        "message":"Hello everyone, this email was sent through the bulk email system."}'
