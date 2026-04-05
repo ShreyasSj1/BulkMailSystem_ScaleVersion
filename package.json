@@ -1,0 +1,31 @@
+{
+  "name": "email-system",
+  "version": "1.0.0",
+  "description": "Production-ready bulk email system with Node.js, Express, MongoDB, Redis, BullMQ, and Nodemailer.",
+  "type": "module",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "DOTENV_CONFIG_PATH=server/.env node server/app.js",
+    "dev": "DOTENV_CONFIG_PATH=server/.env node --watch server/app.js",
+    "worker": "DOTENV_CONFIG_PATH=server/.env node server/queues/emailWorker.js"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "mongodb",
+    "redis",
+    "bullmq",
+    "nodemailer",
+    "bulk-email"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bullmq": "^5.12.12",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.1",
+    "mongoose": "^8.7.1",
+    "nodemailer": "^6.9.15"
+  }
+}
