@@ -80,6 +80,10 @@ export const generateEmailTemplate = (name, message) => `
             padding-bottom: 22px !important;
           }
 
+          .cta-table {
+            width: 100% !important;
+          }
+
           .cta-button {
             display: block !important;
             width: 100% !important;
@@ -136,7 +140,7 @@ export const generateEmailTemplate = (name, message) => `
               </tr>
               <tr>
                 <td class="content-pad cta-wrap" style="padding:8px 24px 28px 24px;">
-                  <table role="presentation" cellspacing="0" cellpadding="0" width="100%">
+                  <table role="presentation" cellspacing="0" cellpadding="0" class="cta-table">
                     <tr>
                       <td style="background:#ffffff;border-radius:999px;">
                         <a href="https://niedge.vercel.app/" target="_blank" rel="noopener noreferrer" class="cta-button" style="display:inline-block;padding:14px 24px;color:#d97706;font-size:16px;font-weight:bold;text-decoration:none;">
