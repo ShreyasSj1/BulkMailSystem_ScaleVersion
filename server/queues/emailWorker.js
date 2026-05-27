@@ -9,7 +9,7 @@ import {
 } from "../config/emailThrottle.js";
 import SuppressionList from "../models/suppressionListModel.js";
 import User from "../models/userModel.js";
-import { sendEmail } from "../services/emailService.js";
+import { getEmailProvider } from "../providers/index.js";
 import { buildEmailContent } from "../utils/buildEmailContent.js";
 import { classifySmtpFailure } from "../utils/classifySmtpFailure.js";
 import { isSuppressedEmail } from "../utils/isSuppressedEmail.js";
@@ -31,6 +31,7 @@ const startWorker = async () => {
       sentSinceCooldown: 0
     };
     const queue = new Queue(queueName, { connection: redisConnection });
+    const provider = getEmailProvider();
 
     const worker = new Worker(
       queueName,
@@ -68,7 +69,7 @@ const startWorker = async () => {
 
         let info;
         try {
-          info = await sendEmail({
+          info = await provider.sendEmail({
             to: email,
             subject,
             html,
