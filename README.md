@@ -34,6 +34,7 @@ email-system/
 - Browser sender page at `GET /` to paste bulk emails and send directly
 - `POST /api/email/send` queues bulk emails instead of sending synchronously
 - Multipart email delivery (`html` + `text`) for better client compatibility
+- Safe outbound throttling with configurable rate, concurrency, and batching
 - BullMQ retry handling with 3 attempts and exponential backoff
 - Separate worker process for asynchronous email delivery
 - Nodemailer email service abstraction for future SendGrid replacement
@@ -57,6 +58,9 @@ REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 SENDER_NAME=NIEdge
 REPLY_TO=support@niedge.com
+EMAILS_PER_SECOND=1
+MAX_CONCURRENCY=1
+BATCH_SIZE=10
 ```
 
 ## Run Instructions
@@ -82,6 +86,21 @@ npm run worker
 6. Paste emails, add subject/message, click `Send Bulk Email`
 7. Optionally set custom `Sender Name` and `Reply-To Email`
 
+## Throttling Configuration
+
+Use these variables in [server/.env](/Users/sj/Desktop/Stuff/Email System/email-system/server/.env):
+
+- `EMAILS_PER_SECOND`: max sends per second (default `1`)
+- `MAX_CONCURRENCY`: worker concurrency limit (default `1`)
+- `BATCH_SIZE`: number of queued jobs grouped before next staged window (default `10`)
+
+Behavior:
+
+- Jobs are queued with staggered delays plus randomized jitter.
+- Worker also applies random pre-send jitter (`300ms` to `2000ms`).
+- BullMQ limiter prevents send bursts beyond `EMAILS_PER_SECOND`.
+- Retry logic remains active (`attempts: 3`, exponential backoff).
+
 ## Workflow
 
 1. You submit emails from the UI (`/`) or API (`POST /api/email/send`).
@@ -92,7 +111,17 @@ npm run worker
 6. Worker generates both HTML and plain text versions of the email.
 7. Worker sends multipart email via Nodemailer SMTP (Gmail).
 8. Optional sender name and reply-to are applied from request or environment variables.
-9. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
+9. Worker applies throttling (rate limits, jitter, and gradual batch pacing).
+10. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
+
+## Worker Metrics Logging
+
+Worker logs now include:
+
+- current send rate (emails/second)
+- queue depth (`waiting`, `active`, `delayed`)
+- retries count
+- failures count
 
 ## API Usage (Optional)
 

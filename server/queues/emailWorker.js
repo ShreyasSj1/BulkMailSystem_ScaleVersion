@@ -1,21 +1,35 @@
 import "dotenv/config";
-import { QueueEvents, Worker } from "bullmq";
+import { Queue, QueueEvents, Worker } from "bullmq";
 import { connectDB } from "../config/db.js";
 import { createRedisClient, redisConnection } from "../config/redis.js";
+import {
+  emailThrottleConfig,
+  getRandomJitterMs
+} from "../config/emailThrottle.js";
 import User from "../models/userModel.js";
 import { sendEmail } from "../services/emailService.js";
 import { buildEmailContent } from "../utils/buildEmailContent.js";
+import { sleep } from "../utils/sleep.js";
 
 const queueName = "emailQueue";
 
 const startWorker = async () => {
   try {
     await connectDB();
+    const stats = {
+      sent: 0,
+      failed: 0,
+      retried: 0
+    };
+    const queue = new Queue(queueName, { connection: redisConnection });
 
     const worker = new Worker(
       queueName,
       async (job) => {
         const { email, subject, message, senderName, replyTo } = job.data;
+        const jitterMs = getRandomJitterMs();
+        await sleep(jitterMs);
+
         const user = await User.findOne({ email }).lean();
         const recipientName = user?.name || "Subscriber";
         const { html, text } = buildEmailContent({
@@ -37,19 +51,25 @@ const startWorker = async () => {
           senderName,
           replyTo
         });
+        stats.sent += 1;
 
         console.log(
-          `[${new Date().toISOString()}] Email sent to ${email}. Message ID: ${info.messageId}`
+          `[${new Date().toISOString()}] Email sent to ${email}. Message ID: ${info.messageId}. Jitter=${jitterMs}ms Attempt=${job.attemptsMade + 1}/${job.opts.attempts}`
         );
 
         return {
           email,
-          messageId: info.messageId
+          messageId: info.messageId,
+          jitterMs
         };
       },
       {
         connection: redisConnection,
-        concurrency: 10
+        concurrency: emailThrottleConfig.maxConcurrency,
+        limiter: {
+          max: emailThrottleConfig.emailsPerSecond,
+          duration: 1000
+        }
       }
     );
 
@@ -58,8 +78,15 @@ const startWorker = async () => {
     });
 
     worker.on("failed", (job, error) => {
+      stats.failed += 1;
+      const attemptsMade = job?.attemptsMade || 0;
+      const maxAttempts = job?.opts?.attempts || 1;
+      const willRetry = attemptsMade < maxAttempts;
+      if (willRetry) {
+        stats.retried += 1;
+      }
       console.error(
-        `[${new Date().toISOString()}] Job ${job?.id} failed for ${job?.data?.email}:`,
+        `[${new Date().toISOString()}] Job ${job?.id} failed for ${job?.data?.email}. Attempts=${attemptsMade}/${maxAttempts} WillRetry=${willRetry}:`,
         error.message
       );
     });
@@ -82,7 +109,33 @@ const startWorker = async () => {
       );
     });
 
-    console.log(`[${new Date().toISOString()}] Email worker started`);
+    const metricsInterval = setInterval(async () => {
+      try {
+        const counts = await queue.getJobCounts(
+          "waiting",
+          "active",
+          "delayed",
+          "failed",
+          "completed"
+        );
+        const sendRatePerSecond = (stats.sent / 15).toFixed(2);
+        console.log(
+          `[${new Date().toISOString()}] Worker metrics | rate=${sendRatePerSecond} emails/s | queue(waiting=${counts.waiting}, active=${counts.active}, delayed=${counts.delayed}) | retries=${stats.retried} | failures=${stats.failed}`
+        );
+        stats.sent = 0;
+      } catch (error) {
+        console.error(
+          `[${new Date().toISOString()}] Failed to fetch worker metrics:`,
+          error.message
+        );
+      }
+    }, 15000);
+
+    metricsInterval.unref();
+
+    console.log(
+      `[${new Date().toISOString()}] Email worker started | EMAILS_PER_SECOND=${emailThrottleConfig.emailsPerSecond} MAX_CONCURRENCY=${emailThrottleConfig.maxConcurrency} BATCH_SIZE=${emailThrottleConfig.batchSize} JITTER_MS=${emailThrottleConfig.minJitterMs}-${emailThrottleConfig.maxJitterMs}`
+    );
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Worker startup failed:`, error);
     process.exit(1);
