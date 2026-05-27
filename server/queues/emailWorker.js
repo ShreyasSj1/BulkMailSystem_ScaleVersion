@@ -1,14 +1,17 @@
 import "dotenv/config";
-import { Queue, QueueEvents, Worker } from "bullmq";
+import { Queue, QueueEvents, UnrecoverableError, Worker } from "bullmq";
 import { connectDB } from "../config/db.js";
 import { createRedisClient, redisConnection } from "../config/redis.js";
 import {
   emailThrottleConfig,
   getRandomJitterMs
 } from "../config/emailThrottle.js";
+import SuppressionList from "../models/suppressionListModel.js";
 import User from "../models/userModel.js";
 import { sendEmail } from "../services/emailService.js";
 import { buildEmailContent } from "../utils/buildEmailContent.js";
+import { classifySmtpFailure } from "../utils/classifySmtpFailure.js";
+import { isSuppressedEmail } from "../utils/isSuppressedEmail.js";
 import { sleep } from "../utils/sleep.js";
 
 const queueName = "emailQueue";
@@ -19,7 +22,9 @@ const startWorker = async () => {
     const stats = {
       sent: 0,
       failed: 0,
-      retried: 0
+      retried: 0,
+      hardBounces: 0,
+      suppressedSkips: 0
     };
     const queue = new Queue(queueName, { connection: redisConnection });
 
@@ -27,6 +32,19 @@ const startWorker = async () => {
       queueName,
       async (job) => {
         const { email, subject, message, senderName, replyTo } = job.data;
+        const suppressed = await isSuppressedEmail(email);
+        if (suppressed) {
+          stats.suppressedSkips += 1;
+          console.log(
+            `[${new Date().toISOString()}] Skipping suppressed recipient ${email} for job ${job.id}`
+          );
+          return {
+            email,
+            skipped: true,
+            reason: "suppressed"
+          };
+        }
+
         const jitterMs = getRandomJitterMs();
         await sleep(jitterMs);
 
@@ -44,14 +62,42 @@ const startWorker = async () => {
           footerName: "Team NIEdge"
         });
 
-        const info = await sendEmail({
-          to: email,
-          subject,
-          html,
-          text,
-          senderName,
-          replyTo
-        });
+        let info;
+        try {
+          info = await sendEmail({
+            to: email,
+            subject,
+            html,
+            text,
+            senderName,
+            replyTo
+          });
+        } catch (error) {
+          const failure = classifySmtpFailure(error);
+          if (failure.isPermanent) {
+            await SuppressionList.updateOne(
+              { email },
+              {
+                $set: {
+                  email,
+                  reason: failure.reason,
+                  type: "hard_bounce",
+                  createdAt: new Date()
+                }
+              },
+              { upsert: true }
+            );
+            stats.hardBounces += 1;
+            console.error(
+              `[${new Date().toISOString()}] Permanent SMTP failure for ${email}. Added to suppression list. Reason=${failure.reason}`
+            );
+            throw new UnrecoverableError(
+              `Permanent SMTP failure (suppressed): ${failure.reason}`
+            );
+          }
+
+          throw error;
+        }
         stats.sent += 1;
 
         console.log(
@@ -121,7 +167,7 @@ const startWorker = async () => {
         );
         const sendRatePerSecond = (stats.sent / 15).toFixed(2);
         console.log(
-          `[${new Date().toISOString()}] Worker metrics | rate=${sendRatePerSecond} emails/s | queue(waiting=${counts.waiting}, active=${counts.active}, delayed=${counts.delayed}) | retries=${stats.retried} | failures=${stats.failed}`
+          `[${new Date().toISOString()}] Worker metrics | rate=${sendRatePerSecond} emails/s | queue(waiting=${counts.waiting}, active=${counts.active}, delayed=${counts.delayed}) | retries=${stats.retried} | failures=${stats.failed} | hardBounces=${stats.hardBounces} | suppressedSkips=${stats.suppressedSkips}`
         );
         stats.sent = 0;
       } catch (error) {

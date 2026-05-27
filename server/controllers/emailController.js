@@ -1,6 +1,7 @@
 import User from "../models/userModel.js";
 import { addBulkEmailJobs } from "../queues/emailQueue.js";
 import { filterUnsubscribedRecipients } from "../utils/filterUnsubscribedRecipients.js";
+import { filterSuppressedRecipients } from "../utils/filterSuppressedRecipients.js";
 
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -60,18 +61,22 @@ export const queueBulkEmails = async (req, res, next) => {
       });
     }
 
-    const { allowedRecipients, skippedUnsubscribed } =
+    const { allowedRecipients: unsubscribedFiltered, skippedUnsubscribed } =
       await filterUnsubscribedRecipients(normalizedEmails);
+
+    const { allowedRecipients, skippedSuppressed } =
+      await filterSuppressedRecipients(unsubscribedFiltered);
 
     if (allowedRecipients.length === 0) {
       console.log(
-        `[${new Date().toISOString()}] No jobs queued. All recipients are unsubscribed.`
+        `[${new Date().toISOString()}] No jobs queued. All recipients are unsubscribed/suppressed.`
       );
       return res.status(202).json({
         success: true,
-        message: "No emails queued. All recipients are unsubscribed.",
+        message: "No emails queued. All recipients are unsubscribed or suppressed.",
         queuedCount: 0,
-        skippedUnsubscribed
+        skippedUnsubscribed,
+        skippedSuppressed
       });
     }
 
@@ -96,7 +101,7 @@ export const queueBulkEmails = async (req, res, next) => {
     );
 
     console.log(
-      `[${new Date().toISOString()}] Queued ${jobs.length} email jobs. Skipped unsubscribed=${skippedUnsubscribed.length}`
+      `[${new Date().toISOString()}] Queued ${jobs.length} email jobs. Skipped unsubscribed=${skippedUnsubscribed.length} suppressed=${skippedSuppressed.length}`
     );
 
     return res.status(202).json({
@@ -104,6 +109,7 @@ export const queueBulkEmails = async (req, res, next) => {
       message: "Emails queued successfully.",
       queuedCount: jobs.length,
       skippedUnsubscribed,
+      skippedSuppressed,
       jobIds: jobs.map((job) => job.id)
     });
   } catch (error) {

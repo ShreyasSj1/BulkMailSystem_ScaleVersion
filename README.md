@@ -41,6 +41,7 @@ email-system/
 - Multipart email delivery (`html` + `text`) for better client compatibility
 - Safe outbound throttling with configurable rate, concurrency, and batching
 - One-click unsubscribe support with DB-backed suppression
+- SMTP hard-bounce suppression list for invalid/permanent failures
 - BullMQ retry handling with 3 attempts and exponential backoff
 - Separate worker process for asynchronous email delivery
 - Nodemailer email service abstraction for future SendGrid replacement
@@ -109,6 +110,16 @@ Use these variables in [server/.env](/Users/sj/Desktop/Stuff/Email System/email-
 - Unsubscribed recipients are skipped before queueing (`filterUnsubscribedRecipients`).
 - Unsubscribe actions and skipped recipients are logged.
 
+## Bounce Suppression Flow
+
+- MongoDB collection: `SuppressionList`
+- Fields: `email`, `reason`, `type`, `createdAt`
+- Worker classifies SMTP failures as permanent vs temporary.
+- Permanent failures (hard bounces/invalid recipients) are added to suppression list.
+- Suppressed emails are skipped before queueing and also guarded again in worker.
+- Permanent failures are marked unrecoverable (no further retries for that job).
+- Temporary SMTP issues still use BullMQ retry policy.
+
 Behavior:
 
 - Jobs are queued with staggered delays plus randomized jitter.
@@ -138,6 +149,8 @@ Worker logs now include:
 - queue depth (`waiting`, `active`, `delayed`)
 - retries count
 - failures count
+- hard bounce count
+- suppressed skip count
 
 ## API Usage (Optional)
 
