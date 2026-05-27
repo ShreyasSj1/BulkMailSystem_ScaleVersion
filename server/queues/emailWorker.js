@@ -4,6 +4,7 @@ import { connectDB } from "../config/db.js";
 import { createRedisClient, redisConnection } from "../config/redis.js";
 import {
   emailThrottleConfig,
+  getDrainCooldownMs,
   getRandomJitterMs
 } from "../config/emailThrottle.js";
 import SuppressionList from "../models/suppressionListModel.js";
@@ -21,10 +22,13 @@ const startWorker = async () => {
     await connectDB();
     const stats = {
       sent: 0,
+      totalSent: 0,
       failed: 0,
       retried: 0,
       hardBounces: 0,
-      suppressedSkips: 0
+      suppressedSkips: 0,
+      cooldownsApplied: 0,
+      sentSinceCooldown: 0
     };
     const queue = new Queue(queueName, { connection: redisConnection });
 
@@ -99,10 +103,25 @@ const startWorker = async () => {
           throw error;
         }
         stats.sent += 1;
+        stats.totalSent += 1;
+        stats.sentSinceCooldown += 1;
 
         console.log(
           `[${new Date().toISOString()}] Email sent to ${email}. Message ID: ${info.messageId}. Jitter=${jitterMs}ms Attempt=${job.attemptsMade + 1}/${job.opts.attempts}`
         );
+
+        if (
+          emailThrottleConfig.enableChunking &&
+          stats.sentSinceCooldown >= emailThrottleConfig.recipientChunkSize
+        ) {
+          const cooldownMs = getDrainCooldownMs();
+          stats.cooldownsApplied += 1;
+          stats.sentSinceCooldown = 0;
+          console.log(
+            `[${new Date().toISOString()}] Applying gradual drain cooldown for ${cooldownMs}ms after ${emailThrottleConfig.recipientChunkSize} sends`
+          );
+          await sleep(cooldownMs);
+        }
 
         return {
           email,
@@ -167,7 +186,7 @@ const startWorker = async () => {
         );
         const sendRatePerSecond = (stats.sent / 15).toFixed(2);
         console.log(
-          `[${new Date().toISOString()}] Worker metrics | rate=${sendRatePerSecond} emails/s | queue(waiting=${counts.waiting}, active=${counts.active}, delayed=${counts.delayed}) | retries=${stats.retried} | failures=${stats.failed} | hardBounces=${stats.hardBounces} | suppressedSkips=${stats.suppressedSkips}`
+          `[${new Date().toISOString()}] Worker metrics | rate=${sendRatePerSecond} emails/s | queue(waiting=${counts.waiting}, active=${counts.active}, delayed=${counts.delayed}) | retries=${stats.retried} | failures=${stats.failed} | hardBounces=${stats.hardBounces} | suppressedSkips=${stats.suppressedSkips} | cooldowns=${stats.cooldownsApplied} | totalSent=${stats.totalSent}`
         );
         stats.sent = 0;
       } catch (error) {
@@ -181,7 +200,7 @@ const startWorker = async () => {
     metricsInterval.unref();
 
     console.log(
-      `[${new Date().toISOString()}] Email worker started | EMAILS_PER_SECOND=${emailThrottleConfig.emailsPerSecond} MAX_CONCURRENCY=${emailThrottleConfig.maxConcurrency} BATCH_SIZE=${emailThrottleConfig.batchSize} JITTER_MS=${emailThrottleConfig.minJitterMs}-${emailThrottleConfig.maxJitterMs}`
+      `[${new Date().toISOString()}] Email worker started | SAFE_MODE=${emailThrottleConfig.safeModeEnabled} EMAILS_PER_SECOND=${emailThrottleConfig.emailsPerSecond} MAX_CONCURRENCY=${emailThrottleConfig.maxConcurrency} BATCH_SIZE=${emailThrottleConfig.batchSize} CHUNKING=${emailThrottleConfig.enableChunking} CHUNK_SIZE=${emailThrottleConfig.recipientChunkSize} CHUNK_INTERVAL_MS=${emailThrottleConfig.chunkIntervalMinMs}-${emailThrottleConfig.chunkIntervalMaxMs} DRAIN_COOLDOWN_MS=${emailThrottleConfig.drainCooldownMinMs}-${emailThrottleConfig.drainCooldownMaxMs} JITTER_MS=${emailThrottleConfig.minJitterMs}-${emailThrottleConfig.maxJitterMs}`
     );
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Worker startup failed:`, error);

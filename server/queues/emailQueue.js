@@ -2,8 +2,9 @@ import { Queue } from "bullmq";
 import { redisConnection } from "../config/redis.js";
 import {
   emailThrottleConfig,
-  getBaseIntervalMs,
-  getRandomJitterMs
+  getChunkPauseMs,
+  getRandomJitterMs,
+  getRecipientSpacingMs
 } from "../config/emailThrottle.js";
 
 export const emailQueue = new Queue("emailQueue", {
@@ -20,30 +21,46 @@ export const emailQueue = new Queue("emailQueue", {
 });
 
 export const addBulkEmailJobs = async (emails) => {
-  const baseIntervalMs = getBaseIntervalMs();
-  const { batchSize } = emailThrottleConfig;
+  const jobs = [];
+  const {
+    enableChunking,
+    recipientChunkSize,
+    safeModeEnabled
+  } = emailThrottleConfig;
+  const effectiveChunkSize = enableChunking
+    ? Math.max(1, recipientChunkSize)
+    : Number.POSITIVE_INFINITY;
+  let scheduledDelayMs = 0;
 
-  const jobs = emails.map((emailJob, index) => {
-    const batchIndex = Math.floor(index / batchSize);
-    const indexInBatch = index % batchSize;
-    const globalOffsetMs = index * baseIntervalMs;
-    const batchBufferMs = batchIndex * 750;
-    const batchJitterMs = getRandomJitterMs();
-    const inBatchJitterMs = Math.floor(getRandomJitterMs() / 3);
+  emails.forEach((emailJob, index) => {
+    if (index > 0) {
+      const startsNewChunk = enableChunking && index % effectiveChunkSize === 0;
+      if (startsNewChunk) {
+        scheduledDelayMs += getChunkPauseMs();
+      } else {
+        scheduledDelayMs += getRecipientSpacingMs();
+      }
+    }
 
-    return {
+    const timestampPatternJitterMs = getRandomJitterMs();
+
+    jobs.push({
       name: "send-email",
       data: emailJob,
       opts: {
-        delay:
-          globalOffsetMs +
-          batchBufferMs +
-          batchJitterMs +
-          indexInBatch * 25 +
-          inBatchJitterMs
+        delay: scheduledDelayMs + timestampPatternJitterMs
       }
-    };
+    });
   });
 
-  return emailQueue.addBulk(jobs);
+  const queuedJobs = await emailQueue.addBulk(jobs);
+  const chunkCount = enableChunking
+    ? Math.ceil(emails.length / effectiveChunkSize)
+    : 1;
+
+  console.log(
+    `[${new Date().toISOString()}] Scheduled ${emails.length} jobs with gradual draining. SAFE_MODE=${safeModeEnabled} CHUNKING=${enableChunking} CHUNK_SIZE=${enableChunking ? effectiveChunkSize : "disabled"} CHUNKS=${chunkCount}`
+  );
+
+  return queuedJobs;
 };

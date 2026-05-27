@@ -65,9 +65,17 @@ REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 SENDER_NAME=NIEdge
 REPLY_TO=support@niedge.com
+APP_BASE_URL=http://localhost:5000
+SAFE_MODE=true
 EMAILS_PER_SECOND=1
 MAX_CONCURRENCY=1
 BATCH_SIZE=10
+ENABLE_RECIPIENT_CHUNKING=true
+RECIPIENT_CHUNK_SIZE=25
+CHUNK_INTERVAL_MIN_MS=120000
+CHUNK_INTERVAL_MAX_MS=240000
+DRAIN_COOLDOWN_MIN_MS=15000
+DRAIN_COOLDOWN_MAX_MS=45000
 ```
 
 ## Run Instructions
@@ -100,6 +108,11 @@ Use these variables in [server/.env](/Users/sj/Desktop/Stuff/Email System/email-
 - `EMAILS_PER_SECOND`: max sends per second (default `1`)
 - `MAX_CONCURRENCY`: worker concurrency limit (default `1`)
 - `BATCH_SIZE`: number of queued jobs grouped before next staged window (default `10`)
+- `SAFE_MODE`: clamps the system into a Gmail-friendly send profile
+- `ENABLE_RECIPIENT_CHUNKING`: stages recipients in chunks instead of one continuous burst
+- `RECIPIENT_CHUNK_SIZE`: recipients per chunk, for example `25`
+- `CHUNK_INTERVAL_MIN_MS` / `CHUNK_INTERVAL_MAX_MS`: randomized pause between recipient chunks
+- `DRAIN_COOLDOWN_MIN_MS` / `DRAIN_COOLDOWN_MAX_MS`: worker cooldown between chunks during gradual draining
 
 ## Unsubscribe Flow
 
@@ -125,6 +138,9 @@ Behavior:
 - Jobs are queued with staggered delays plus randomized jitter.
 - Worker also applies random pre-send jitter (`300ms` to `2000ms`).
 - BullMQ limiter prevents send bursts beyond `EMAILS_PER_SECOND`.
+- Recipient chunking can stage sends like `25 recipients every few minutes`.
+- Worker applies cooldown windows between chunks for gradual queue draining.
+- SAFE_MODE keeps rates and concurrency conservative for Gmail SMTP.
 - Retry logic remains active (`attempts: 3`, exponential backoff).
 
 ## Workflow
@@ -151,6 +167,7 @@ Worker logs now include:
 - failures count
 - hard bounce count
 - suppressed skip count
+- cooldown count
 
 ## API Usage (Optional)
 
