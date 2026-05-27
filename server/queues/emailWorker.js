@@ -33,6 +33,7 @@ const startWorker = async () => {
         const user = await User.findOne({ email }).lean();
         const recipientName = user?.name || "Subscriber";
         const { html, text } = buildEmailContent({
+          recipientEmail: email,
           recipientName,
           subject,
           message,

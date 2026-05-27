@@ -12,7 +12,8 @@ email-system/
 │   │   ├── db.js
 │   │   ├── redis.js
 │   ├── controllers/
-│   │   └── emailController.js
+│   │   ├── emailController.js
+│   │   └── unsubscribeController.js
 │   ├── routes/
 │   │   └── emailRoutes.js
 │   ├── services/
@@ -21,10 +22,14 @@ email-system/
 │   │   ├── emailQueue.js
 │   │   └── emailWorker.js
 │   ├── models/
-│   │   └── userModel.js
+│   │   ├── userModel.js
+│   │   └── unsubscribedUserModel.js
 │   ├── utils/
-│   │   └── emailTemplate.js
-│   └── .env
+│   │   ├── buildEmailContent.js
+│   │   ├── emailTemplate.js
+│   │   ├── filterUnsubscribedRecipients.js
+│   │   └── generatePlainText.js
+│   └── .env.example
 ├── package.json
 └── README.md
 ```
@@ -35,6 +40,7 @@ email-system/
 - `POST /api/email/send` queues bulk emails instead of sending synchronously
 - Multipart email delivery (`html` + `text`) for better client compatibility
 - Safe outbound throttling with configurable rate, concurrency, and batching
+- One-click unsubscribe support with DB-backed suppression
 - BullMQ retry handling with 3 attempts and exponential backoff
 - Separate worker process for asynchronous email delivery
 - Nodemailer email service abstraction for future SendGrid replacement
@@ -47,7 +53,7 @@ email-system/
 npm install
 ```
 
-Update environment variables in [server/.env](/Users/sj/Desktop/Stuff/Email System/email-system/server/.env):
+Create `server/.env` from [server/.env.example](/Users/sj/Desktop/Stuff/Email System/email-system/server/.env.example), then update values:
 
 ```env
 PORT=5000
@@ -94,6 +100,15 @@ Use these variables in [server/.env](/Users/sj/Desktop/Stuff/Email System/email-
 - `MAX_CONCURRENCY`: worker concurrency limit (default `1`)
 - `BATCH_SIZE`: number of queued jobs grouped before next staged window (default `10`)
 
+## Unsubscribe Flow
+
+- Every email includes an unsubscribe link.
+- Endpoint: `GET /unsubscribe?email=<recipient-email>`
+- Alias endpoint: `GET /api/email/unsubscribe?email=<recipient-email>`
+- Clicking unsubscribe stores the email in `UnsubscribedUsers`.
+- Unsubscribed recipients are skipped before queueing (`filterUnsubscribedRecipients`).
+- Unsubscribe actions and skipped recipients are logged.
+
 Behavior:
 
 - Jobs are queued with staggered delays plus randomized jitter.
@@ -105,14 +120,15 @@ Behavior:
 
 1. You submit emails from the UI (`/`) or API (`POST /api/email/send`).
 2. Server validates and normalizes email IDs.
-3. Valid emails are saved/deduplicated in MongoDB.
-4. One BullMQ job is created per recipient.
-5. Worker consumes jobs asynchronously from Redis-backed queue.
-6. Worker generates both HTML and plain text versions of the email.
-7. Worker sends multipart email via Nodemailer SMTP (Gmail).
-8. Optional sender name and reply-to are applied from request or environment variables.
-9. Worker applies throttling (rate limits, jitter, and gradual batch pacing).
-10. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
+3. Unsubscribed users are filtered out before jobs are created.
+4. Valid recipients are saved/deduplicated in MongoDB.
+5. One BullMQ job is created per allowed recipient.
+6. Worker consumes jobs asynchronously from Redis-backed queue.
+7. Worker generates both HTML and plain text versions of the email.
+8. Worker sends multipart email via Nodemailer SMTP (Gmail).
+9. Optional sender name and reply-to are applied from request or environment variables.
+10. Worker applies throttling (rate limits, jitter, and gradual batch pacing).
+11. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
 
 ## Worker Metrics Logging
 

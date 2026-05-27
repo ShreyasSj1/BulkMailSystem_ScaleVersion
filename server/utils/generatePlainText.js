@@ -1,8 +1,10 @@
 export const generatePlainText = ({
+  recipientEmail,
   recipientName = "Subscriber",
   subject,
   message,
-  ctaUrl = "https://niedge.vercel.app/"
+  ctaUrl = "https://niedge.vercel.app/",
+  unsubscribeUrl
 }) => {
   return [
     `Subject: ${subject}`,
@@ -13,7 +15,11 @@ export const generatePlainText = ({
     "",
     `Explore: ${ctaUrl}`,
     "",
+    `Unsubscribe: ${unsubscribeUrl}`,
+    "",
     "Thanks,",
-    "Team NIEdge"
+    "Team NIEdge",
+    "",
+    `Email: ${recipientEmail}`
   ].join("\n");
 };

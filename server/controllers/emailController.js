@@ -1,5 +1,6 @@
 import User from "../models/userModel.js";
 import { addBulkEmailJobs } from "../queues/emailQueue.js";
+import { filterUnsubscribedRecipients } from "../utils/filterUnsubscribedRecipients.js";
 
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,8 +60,23 @@ export const queueBulkEmails = async (req, res, next) => {
       });
     }
 
+    const { allowedRecipients, skippedUnsubscribed } =
+      await filterUnsubscribedRecipients(normalizedEmails);
+
+    if (allowedRecipients.length === 0) {
+      console.log(
+        `[${new Date().toISOString()}] No jobs queued. All recipients are unsubscribed.`
+      );
+      return res.status(202).json({
+        success: true,
+        message: "No emails queued. All recipients are unsubscribed.",
+        queuedCount: 0,
+        skippedUnsubscribed
+      });
+    }
+
     await User.bulkWrite(
-      normalizedEmails.map((email) => ({
+      allowedRecipients.map((email) => ({
         updateOne: {
           filter: { email },
           update: { $setOnInsert: { email } },
@@ -70,7 +86,7 @@ export const queueBulkEmails = async (req, res, next) => {
     );
 
     const jobs = await addBulkEmailJobs(
-      normalizedEmails.map((email) => ({
+      allowedRecipients.map((email) => ({
         email,
         subject: subject.trim(),
         message: message.trim(),
@@ -80,13 +96,14 @@ export const queueBulkEmails = async (req, res, next) => {
     );
 
     console.log(
-      `[${new Date().toISOString()}] Queued ${jobs.length} email jobs`
+      `[${new Date().toISOString()}] Queued ${jobs.length} email jobs. Skipped unsubscribed=${skippedUnsubscribed.length}`
     );
 
     return res.status(202).json({
       success: true,
       message: "Emails queued successfully.",
       queuedCount: jobs.length,
+      skippedUnsubscribed,
       jobIds: jobs.map((job) => job.id)
     });
   } catch (error) {

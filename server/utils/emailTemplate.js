@@ -8,7 +8,8 @@ export const generateEmailTemplate = ({
   message,
   ctaText = "Explore Now",
   ctaUrl = "https://niedge.vercel.app/",
-  footerName = "Team NIEdge"
+  footerName = "Team NIEdge",
+  unsubscribeUrl = "http://localhost:5000/api/email/unsubscribe"
 }) => `
   <!DOCTYPE html>
   <html lang="en">
@@ -162,6 +163,10 @@ export const generateEmailTemplate = ({
                 <td class="content-pad" style="padding:0 24px 24px 24px;">
                   <p class="footer-copy" style="margin:0;font-size:13px;color:#7c5200;line-height:1.6;">
                     Thanks,<br />${escapeHtml(footerName)}
+                  </p>
+                  <p style="margin:12px 0 0 0;font-size:12px;line-height:1.6;color:#7c5200;">
+                    If you no longer want these emails, you can
+                    <a href="${escapeHtml(unsubscribeUrl)}" style="color:#8f5300;text-decoration:underline;">unsubscribe here</a>.
                   </p>
                 </td>
               </tr>

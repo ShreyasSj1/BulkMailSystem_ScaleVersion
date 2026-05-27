@@ -3,6 +3,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
+import { unsubscribeByEmail } from "./controllers/unsubscribeController.js";
 import emailRoutes from "./routes/emailRoutes.js";
 
 const app = express();
@@ -24,6 +25,8 @@ app.get("/health", (_req, res) => {
 app.get("/", (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
+
+app.get("/unsubscribe", unsubscribeByEmail);
 
 app.use("/api/email", emailRoutes);
 
