@@ -33,6 +33,7 @@ email-system/
 
 - Browser sender page at `GET /` to paste bulk emails and send directly
 - `POST /api/email/send` queues bulk emails instead of sending synchronously
+- Multipart email delivery (`html` + `text`) for better client compatibility
 - BullMQ retry handling with 3 attempts and exponential backoff
 - Separate worker process for asynchronous email delivery
 - Nodemailer email service abstraction for future SendGrid replacement
@@ -54,6 +55,8 @@ PASSWORD=your_google_app_password
 MONGO_URI=mongodb://127.0.0.1:27017/email_system
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
+SENDER_NAME=NIEdge
+REPLY_TO=support@niedge.com
 ```
 
 ## Run Instructions
@@ -77,6 +80,7 @@ npm run worker
 [http://localhost:5000/](http://localhost:5000/)
 
 6. Paste emails, add subject/message, click `Send Bulk Email`
+7. Optionally set custom `Sender Name` and `Reply-To Email`
 
 ## Workflow
 
@@ -85,8 +89,10 @@ npm run worker
 3. Valid emails are saved/deduplicated in MongoDB.
 4. One BullMQ job is created per recipient.
 5. Worker consumes jobs asynchronously from Redis-backed queue.
-6. Worker renders HTML template and sends via Nodemailer SMTP.
-7. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
+6. Worker generates both HTML and plain text versions of the email.
+7. Worker sends multipart email via Nodemailer SMTP (Gmail).
+8. Optional sender name and reply-to are applied from request or environment variables.
+9. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
 
 ## API Usage (Optional)
 
@@ -98,7 +104,9 @@ curl -X POST http://localhost:5000/api/email/send \
   -d '{
     "emails": ["user1@gmail.com", "user2@gmail.com"],
     "subject": "NIEdge Update: New Placements Section Is Live",
-    "message": "In the latest update, we have added a NEW SECTION called PLACEMENTS. It is your ultimate guide to prepare for the upcoming placement season."
+    "message": "In the latest update, we have added a NEW SECTION called PLACEMENTS. It is your ultimate guide to prepare for the upcoming placement season.",
+    "senderName": "NIEdge",
+    "replyTo": "support@niedge.com"
   }'
 ```
 

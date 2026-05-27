@@ -23,11 +23,15 @@ const getTransporter = () => {
   return transporter;
 };
 
-export const sendEmail = async ({ to, subject, html, text }) => {
+export const sendEmail = async ({ to, subject, html, text, senderName, replyTo }) => {
   const mailTransporter = getTransporter();
+  const resolvedSenderName = senderName || process.env.SENDER_NAME || "NIEdge";
+  const resolvedReplyTo = replyTo || process.env.REPLY_TO;
+  const fromAddress = `"${resolvedSenderName.replace(/"/g, "")}" <${process.env.EMAIL}>`;
 
   return mailTransporter.sendMail({
-    from: process.env.EMAIL,
+    from: fromAddress,
+    replyTo: resolvedReplyTo,
     to,
     subject,
     html,

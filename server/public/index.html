@@ -173,6 +173,16 @@ bob@gmail.com, charlie@gmail.com dave@gmail.com"
           </div>
 
           <div>
+            <label for="senderName">Sender Name (optional)</label>
+            <input id="senderName" type="text" placeholder="NIEdge" />
+          </div>
+
+          <div>
+            <label for="replyTo">Reply-To Email (optional)</label>
+            <input id="replyTo" type="email" placeholder="support@niedge.com" />
+          </div>
+
+          <div>
             <label for="message">Message</label>
             <textarea
               id="message"
@@ -194,6 +204,8 @@ bob@gmail.com, charlie@gmail.com dave@gmail.com"
       const form = document.getElementById("bulkEmailForm");
       const emailsInput = document.getElementById("emails");
       const subjectInput = document.getElementById("subject");
+      const senderNameInput = document.getElementById("senderName");
+      const replyToInput = document.getElementById("replyTo");
       const messageInput = document.getElementById("message");
       const sendBtn = document.getElementById("sendBtn");
       const statusEl = document.getElementById("status");
@@ -247,6 +259,8 @@ bob@gmail.com, charlie@gmail.com dave@gmail.com"
         setStatus("", "");
 
         const subject = subjectInput.value.trim();
+        const senderName = senderNameInput.value.trim();
+        const replyTo = replyToInput.value.trim();
         const message = messageInput.value.trim();
         const valid = validEmails(emailsInput.value);
         const invalid = invalidEmails(emailsInput.value);
@@ -276,7 +290,9 @@ bob@gmail.com, charlie@gmail.com dave@gmail.com"
             body: JSON.stringify({
               emails: valid,
               subject,
-              message
+              message,
+              senderName: senderName || undefined,
+              replyTo: replyTo || undefined
             })
           });
 

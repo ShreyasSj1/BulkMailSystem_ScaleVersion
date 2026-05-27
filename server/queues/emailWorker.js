@@ -4,7 +4,7 @@ import { connectDB } from "../config/db.js";
 import { createRedisClient, redisConnection } from "../config/redis.js";
 import User from "../models/userModel.js";
 import { sendEmail } from "../services/emailService.js";
-import { generateEmailTemplate } from "../utils/emailTemplate.js";
+import { buildEmailContent } from "../utils/buildEmailContent.js";
 
 const queueName = "emailQueue";
 
@@ -15,16 +15,27 @@ const startWorker = async () => {
     const worker = new Worker(
       queueName,
       async (job) => {
-        const { email, subject, message } = job.data;
+        const { email, subject, message, senderName, replyTo } = job.data;
         const user = await User.findOne({ email }).lean();
-        const recipientName = user?.name || "Customer";
-        const html = generateEmailTemplate(recipientName, message);
+        const recipientName = user?.name || "Subscriber";
+        const { html, text } = buildEmailContent({
+          recipientName,
+          subject,
+          message,
+          ctaText: "Explore Now",
+          ctaUrl: "https://niedge.vercel.app/",
+          heading: "NIEdge just became better.",
+          intro: "A smarter place to prepare, explore, and stay ready for what comes next.",
+          footerName: "Team NIEdge"
+        });
 
         const info = await sendEmail({
           to: email,
           subject,
           html,
-          text: `Hi ${recipientName},\n\n${message}\n`
+          text,
+          senderName,
+          replyTo
         });
 
         console.log(

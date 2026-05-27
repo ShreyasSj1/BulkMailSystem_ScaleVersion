@@ -8,7 +8,7 @@ const isValidEmail = (email) => {
 
 export const queueBulkEmails = async (req, res, next) => {
   try {
-    const { emails, subject, message } = req.body;
+    const { emails, subject, message, senderName, replyTo } = req.body;
 
     if (!Array.isArray(emails) || emails.length === 0) {
       return res.status(400).json({
@@ -29,6 +29,23 @@ export const queueBulkEmails = async (req, res, next) => {
         success: false,
         message: "message is required."
       });
+    }
+
+    if (senderName !== undefined && (typeof senderName !== "string" || !senderName.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "senderName must be a non-empty string when provided."
+      });
+    }
+
+    if (replyTo !== undefined) {
+      const normalizedReplyTo = String(replyTo).trim().toLowerCase();
+      if (!isValidEmail(normalizedReplyTo)) {
+        return res.status(400).json({
+          success: false,
+          message: "replyTo must be a valid email when provided."
+        });
+      }
     }
 
     const normalizedEmails = [...new Set(emails.map((email) => String(email).trim().toLowerCase()))];
@@ -56,7 +73,9 @@ export const queueBulkEmails = async (req, res, next) => {
       normalizedEmails.map((email) => ({
         email,
         subject: subject.trim(),
-        message: message.trim()
+        message: message.trim(),
+        senderName: senderName?.trim(),
+        replyTo: replyTo?.trim().toLowerCase()
       }))
     );
 

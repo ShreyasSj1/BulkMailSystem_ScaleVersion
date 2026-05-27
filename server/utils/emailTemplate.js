@@ -1,18 +1,21 @@
-const escapeHtml = (value) =>
-  String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+import { escapeHtml } from "./escapeHtml.js";
 
-export const generateEmailTemplate = (name, message) => `
+export const generateEmailTemplate = ({
+  recipientName = "Subscriber",
+  preheader = "NIEdge update",
+  heading = "NIEdge just became better.",
+  intro = "A smarter place to prepare, explore, and stay ready for what comes next.",
+  message,
+  ctaText = "Explore Now",
+  ctaUrl = "https://niedge.vercel.app/",
+  footerName = "Team NIEdge"
+}) => `
   <!DOCTYPE html>
   <html lang="en">
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Email</title>
+      <title>${escapeHtml(heading)}</title>
       <style>
         body,
         table,
@@ -101,13 +104,16 @@ export const generateEmailTemplate = (name, message) => `
       </style>
     </head>
     <body style="margin:0;padding:0;background-color:#f4b000;font-family:Arial,sans-serif;">
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+        ${escapeHtml(preheader)}
+      </div>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="outer-shell" style="background:linear-gradient(135deg,#ffd34f 0%,#ffbe1a 35%,#f59e0b 100%);padding:32px 16px;">
         <tr>
           <td align="center">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="main-card" style="max-width:600px;width:100%;background:rgba(255,242,204,0.92);border:1px solid rgba(255,255,255,0.35);border-radius:24px;overflow:hidden;box-shadow:0 18px 45px rgba(120,72,0,0.28);">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="main-card" style="max-width:600px;width:100%;background:rgba(255,242,204,0.92);border:1px solid rgba(255,255,255,0.35);border-radius:24px;overflow:hidden;box-shadow:0 18px 45px rgba(120,72,0,0.28);" aria-label="NIEdge update email">
               <tr>
                 <td class="content-pad top-pad" style="padding:18px 24px 0 24px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" aria-hidden="true">
                     <tr>
                       <td style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#8a5300;font-weight:bold;">
                         Latest Drop
@@ -118,20 +124,21 @@ export const generateEmailTemplate = (name, message) => `
               </tr>
               <tr>
                 <td class="content-pad" style="padding:18px 24px 8px 24px;color:#1a1a1a;line-height:1.6;">
+                  <h2 style="margin:0 0 8px 0;font-size:15px;line-height:1.4;color:#704600;font-weight:600;">Product Announcement</h2>
                   <h1 class="hero-title" style="margin:0 0 12px 0;font-size:42px;line-height:1.06;font-weight:800;color:#141414;">
-                    NIEdge just became better.<br />
+                    ${escapeHtml(heading)}
                   </h1>
                   <p class="hero-copy" style="margin:0;font-size:18px;line-height:1.6;color:#6a4300;">
-                    A smarter place to prepare, explore, and stay ready for what comes next.
+                    ${escapeHtml(intro)}
                   </p>
                 </td>
               </tr>
               <tr>
                 <td class="content-pad" style="padding:18px 24px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="inner-card" style="background:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.45);border-radius:18px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="inner-card" style="background:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.45);border-radius:18px;" aria-label="Main message">
                     <tr>
                       <td class="inner-copy" style="padding:24px;color:#2b1b00;font-size:16px;line-height:1.8;">
-                        <p class="inner-greeting" style="margin:0 0 14px 0;font-size:18px;font-weight:bold;">Hey Subscriber,</p>
+                        <p class="inner-greeting" style="margin:0 0 14px 0;font-size:18px;font-weight:bold;">Hey ${escapeHtml(recipientName)},</p>
                         <p style="margin:0;">${escapeHtml(message)}</p>
                       </td>
                     </tr>
@@ -143,8 +150,8 @@ export const generateEmailTemplate = (name, message) => `
                   <table role="presentation" cellspacing="0" cellpadding="0" class="cta-table">
                     <tr>
                       <td style="background:#ffffff;border-radius:999px;">
-                        <a href="https://niedge.vercel.app/" target="_blank" rel="noopener noreferrer" class="cta-button" style="display:inline-block;padding:14px 24px;color:#d97706;font-size:16px;font-weight:bold;text-decoration:none;">
-                          Explore Now
+                        <a href="${escapeHtml(ctaUrl)}" target="_blank" rel="noopener noreferrer" class="cta-button" style="display:inline-block;padding:14px 24px;color:#d97706;font-size:16px;font-weight:bold;text-decoration:none;">
+                          ${escapeHtml(ctaText)}
                         </a>
                       </td>
                     </tr>
@@ -154,7 +161,7 @@ export const generateEmailTemplate = (name, message) => `
               <tr>
                 <td class="content-pad" style="padding:0 24px 24px 24px;">
                   <p class="footer-copy" style="margin:0;font-size:13px;color:#7c5200;line-height:1.6;">
-                    Thanks,<br />Team NIEdge
+                    Thanks,<br />${escapeHtml(footerName)}
                   </p>
                 </td>
               </tr>
