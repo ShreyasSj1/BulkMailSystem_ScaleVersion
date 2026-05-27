@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bulk Email Sender</title>
+    <style>
+      :root {
+        --bg-start: #f8c429;
+        --bg-end: #f59e0b;
+        --card: #fff4d4;
+        --text: #1d1400;
+        --muted: #694700;
+        --line: #efdba7;
+        --accent: #d97706;
+        --accent-strong: #b45309;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        color: var(--text);
+        background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .wrap {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 20px;
+        box-shadow: 0 15px 40px rgba(104, 62, 0, 0.2);
+        padding: 22px;
+      }
+
+      h1 {
+        margin: 0 0 6px 0;
+        font-size: 32px;
+        line-height: 1.1;
+      }
+
+      p.sub {
+        margin: 0 0 18px 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 15px;
+        color: var(--text);
+        background: #fff9ea;
+      }
+
+      textarea {
+        min-height: 150px;
+        resize: vertical;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #fff;
+        color: var(--accent-strong);
+        border: 1px solid #f5d494;
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .status {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        display: none;
+        font-size: 14px;
+      }
+
+      .status.ok {
+        display: block;
+        background: #e9ffe8;
+        border: 1px solid #b2ecae;
+      }
+
+      .status.err {
+        display: block;
+        background: #fff0ef;
+        border: 1px solid #ffc6c1;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 640px) {
+        h1 {
+          font-size: 27px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1>Bulk Email Sender</h1>
+        <p class="sub">
+          Paste email IDs (comma, space, or new line separated), add subject/message, and send directly.
+        </p>
+
+        <form id="bulkEmailForm" class="grid">
+          <div>
+            <label for="emails">Email List</label>
+            <textarea
+              id="emails"
+              placeholder="Paste emails here...
+
+alice@gmail.com
+bob@gmail.com, charlie@gmail.com dave@gmail.com"
+              required
+            ></textarea>
+          </div>
+
+          <div class="row">
+            <button type="button" class="secondary" id="copyNormalizedBtn">Copy Cleaned Emails</button>
+            <span class="meta" id="emailCount">0 valid emails detected</span>
+          </div>
+
+          <div>
+            <label for="subject">Subject</label>
+            <input id="subject" type="text" placeholder="NIEdge Update: New Placements Section Is Live" required />
+          </div>
+
+          <div>
+            <label for="message">Message</label>
+            <textarea
+              id="message"
+              placeholder="In the latest update, we have added a NEW SECTION called PLACEMENTS..."
+              required
+            ></textarea>
+          </div>
+
+          <div class="row">
+            <button id="sendBtn" type="submit">Send Bulk Email</button>
+          </div>
+        </form>
+
+        <div id="status" class="status"></div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("bulkEmailForm");
+      const emailsInput = document.getElementById("emails");
+      const subjectInput = document.getElementById("subject");
+      const messageInput = document.getElementById("message");
+      const sendBtn = document.getElementById("sendBtn");
+      const statusEl = document.getElementById("status");
+      const copyNormalizedBtn = document.getElementById("copyNormalizedBtn");
+      const emailCount = document.getElementById("emailCount");
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      const parseEmails = (rawText) => {
+        return [...new Set(
+          rawText
+            .split(/[\s,;]+/)
+            .map((email) => email.trim().toLowerCase())
+            .filter(Boolean)
+        )];
+      };
+
+      const validEmails = (rawText) => parseEmails(rawText).filter((email) => emailRegex.test(email));
+      const invalidEmails = (rawText) => parseEmails(rawText).filter((email) => !emailRegex.test(email));
+
+      const setStatus = (type, text) => {
+        statusEl.className = `status ${type}`;
+        statusEl.textContent = text;
+      };
+
+      const refreshCount = () => {
+        const valid = validEmails(emailsInput.value);
+        emailCount.textContent = `${valid.length} valid emails detected`;
+      };
+
+      emailsInput.addEventListener("input", refreshCount);
+      refreshCount();
+
+      copyNormalizedBtn.addEventListener("click", async () => {
+        const valid = validEmails(emailsInput.value);
+        if (valid.length === 0) {
+          setStatus("err", "No valid emails to copy.");
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(valid.join(", "));
+          setStatus("ok", `Copied ${valid.length} cleaned emails.`);
+        } catch {
+          setStatus("err", "Clipboard permission denied. Copy manually from the list.");
+        }
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        setStatus("", "");
+
+        const subject = subjectInput.value.trim();
+        const message = messageInput.value.trim();
+        const valid = validEmails(emailsInput.value);
+        const invalid = invalidEmails(emailsInput.value);
+
+        if (!subject || !message) {
+          setStatus("err", "Subject and message are required.");
+          return;
+        }
+
+        if (valid.length === 0) {
+          setStatus("err", "Please paste at least one valid email.");
+          return;
+        }
+
+        if (invalid.length > 0) {
+          setStatus("err", `Fix invalid emails first: ${invalid.join(", ")}`);
+          return;
+        }
+
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Queueing...";
+
+        try {
+          const response = await fetch("/api/email/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              emails: valid,
+              subject,
+              message
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Failed to queue emails.");
+          }
+
+          setStatus(
+            "ok",
+            `Queued ${data.queuedCount} emails successfully. Job IDs: ${data.jobIds.join(", ")}`
+          );
+        } catch (error) {
+          setStatus("err", error.message || "Something went wrong while sending.");
+        } finally {
+          sendBtn.disabled = false;
+          sendBtn.textContent = "Send Bulk Email";
+        }
+      });
+    </script>
+  </body>
+</html>

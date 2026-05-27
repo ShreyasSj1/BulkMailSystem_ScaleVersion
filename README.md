@@ -31,6 +31,7 @@ email-system/
 
 ## Features
 
+- Browser sender page at `GET /` to paste bulk emails and send directly
 - `POST /api/email/send` queues bulk emails instead of sending synchronously
 - BullMQ retry handling with 3 attempts and exponential backoff
 - Separate worker process for asynchronous email delivery
@@ -44,47 +45,65 @@ email-system/
 npm install
 ```
 
-Update environment variables in [`server/.env`](/Users/sj/Desktop/Stuff/Email System/email-system/server/.env).
+Update environment variables in [server/.env](/Users/sj/Desktop/Stuff/Email System/email-system/server/.env):
 
-## Run Server
+```env
+PORT=5000
+EMAIL=your_email@gmail.com
+PASSWORD=your_google_app_password
+MONGO_URI=mongodb://127.0.0.1:27017/email_system
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+```
+
+## Run Instructions
+
+1. Start MongoDB
+2. Start Redis
+3. Start API server:
 
 ```bash
 npm start
 ```
 
-## Run Worker
-
-Open another terminal and run:
+4. Start worker in a second terminal:
 
 ```bash
 npm run worker
 ```
 
-## Sample API Request
+5. Open sender UI:
 
-### cURL
+[http://localhost:5000/](http://localhost:5000/)
+
+6. Paste emails, add subject/message, click `Send Bulk Email`
+
+## Workflow
+
+1. You submit emails from the UI (`/`) or API (`POST /api/email/send`).
+2. Server validates and normalizes email IDs.
+3. Valid emails are saved/deduplicated in MongoDB.
+4. One BullMQ job is created per recipient.
+5. Worker consumes jobs asynchronously from Redis-backed queue.
+6. Worker renders HTML template and sends via Nodemailer SMTP.
+7. Success/failure is logged; failed jobs retry automatically (3 attempts with exponential backoff).
+
+## API Usage (Optional)
+
+You can still send directly via API:
 
 ```bash
-curl --request POST http://localhost:5000/api/email/send \
-  --header "Content-Type: application/json" \
-  --data '{
+curl -X POST http://localhost:5000/api/email/send \
+  -H "Content-Type: application/json" \
+  -d '{
     "emails": ["user1@gmail.com", "user2@gmail.com"],
-    "subject": "Special Offer",
-    "message": "Hello! This is a queued bulk email from our system."
+    "subject": "NIEdge Update: New Placements Section Is Live",
+    "message": "In the latest update, we have added a NEW SECTION called PLACEMENTS. It is your ultimate guide to prepare for the upcoming placement season."
   }'
-```
-
-### Postman Body
-
-```json
-{
-  "emails": ["user1@gmail.com", "user2@gmail.com"],
-  "subject": "Special Offer",
-  "message": "Hello! This is a queued bulk email from our system."
-}
 ```
 
 ## Notes
 
 - Use a Gmail app password if you are testing with Gmail SMTP.
 - Make sure MongoDB and Redis are running before starting the server and worker.
+- Keep `npm start` and `npm run worker` running in separate terminals while sending emails.
