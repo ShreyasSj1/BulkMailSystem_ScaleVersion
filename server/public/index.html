@@ -231,6 +231,41 @@ bob@gmail.com, charlie@gmail.com dave@gmail.com"
         statusEl.textContent = text;
       };
 
+      const buildQueueStatusMessage = (data) => {
+        const queuedCount = Number(data?.queuedCount || 0);
+        const jobIds = Array.isArray(data?.jobIds) ? data.jobIds : [];
+        const skippedUnsubscribed = Array.isArray(data?.skippedUnsubscribed)
+          ? data.skippedUnsubscribed
+          : [];
+        const skippedSuppressed = Array.isArray(data?.skippedSuppressed)
+          ? data.skippedSuppressed
+          : [];
+        const parts = [];
+
+        if (queuedCount > 0) {
+          parts.push(`Queued ${queuedCount} emails successfully.`);
+          if (jobIds.length > 0) {
+            parts.push(`Job IDs: ${jobIds.join(", ")}`);
+          }
+        } else {
+          parts.push("No emails were queued.");
+        }
+
+        if (skippedUnsubscribed.length > 0) {
+          parts.push(
+            `Skipped unsubscribed recipients (${skippedUnsubscribed.length}): ${skippedUnsubscribed.join(", ")}`
+          );
+        }
+
+        if (skippedSuppressed.length > 0) {
+          parts.push(
+            `Skipped suppressed recipients (${skippedSuppressed.length}): ${skippedSuppressed.join(", ")}`
+          );
+        }
+
+        return parts.join(" ");
+      };
+
       const refreshCount = () => {
         const valid = validEmails(emailsInput.value);
         emailCount.textContent = `${valid.length} valid emails detected`;
@@ -302,10 +337,7 @@ bob@gmail.com, charlie@gmail.com dave@gmail.com"
             throw new Error(data.message || "Failed to queue emails.");
           }
 
-          setStatus(
-            "ok",
-            `Queued ${data.queuedCount} emails successfully. Job IDs: ${data.jobIds.join(", ")}`
-          );
+          setStatus("ok", buildQueueStatusMessage(data));
         } catch (error) {
           setStatus("err", error.message || "Something went wrong while sending.");
         } finally {

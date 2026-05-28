@@ -38,6 +38,7 @@ email-system/
 
 - Browser sender page at `GET /` to paste bulk emails and send directly
 - `POST /api/email/send` queues bulk emails instead of sending synchronously
+- `POST /api/email/send-from-firebase` fetches recipient emails from Firestore and queues them
 - Multipart email delivery (`html` + `text`) for better client compatibility
 - Safe outbound throttling with configurable rate, concurrency, and batching
 - One-click unsubscribe support with DB-backed suppression
@@ -76,6 +77,10 @@ CHUNK_INTERVAL_MIN_MS=120000
 CHUNK_INTERVAL_MAX_MS=240000
 DRAIN_COOLDOWN_MIN_MS=15000
 DRAIN_COOLDOWN_MAX_MS=45000
+
+# Firebase recipient source (set either KEY or PATH)
+FIREBASE_SERVICE_ACCOUNT_KEY=
+FIREBASE_SERVICE_ACCOUNT_PATH=
 ```
 
 ## Run Instructions
@@ -184,6 +189,27 @@ curl -X POST http://localhost:5000/api/email/send \
     "replyTo": "support@niedge.com"
   }'
 ```
+
+### Send From Firebase (Firestore)
+
+```bash
+curl -X POST http://localhost:5000/api/email/send-from-firebase \
+  -H "Content-Type: application/json" \
+  -d '{
+    "collectionPath": "users",
+    "emailField": "email",
+    "limit": 200,
+    "subject": "NIEdge Update",
+    "message": "Latest update from NIEdge platform.",
+    "senderName": "NIEdge",
+    "replyTo": "support@niedge.com"
+  }'
+```
+
+Notes:
+- `collectionPath` is your Firestore collection (for example `users`).
+- `emailField` is the field containing email IDs (default `email`).
+- `limit` is optional.
 
 ## Notes
 

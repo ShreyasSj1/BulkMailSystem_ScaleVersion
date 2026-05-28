@@ -3,7 +3,10 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
-import { unsubscribeByEmail } from "./controllers/unsubscribeController.js";
+import {
+  resubscribeByEmail,
+  unsubscribeByEmail
+} from "./controllers/unsubscribeController.js";
 import emailRoutes from "./routes/emailRoutes.js";
 
 const app = express();
@@ -27,6 +30,7 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/unsubscribe", unsubscribeByEmail);
+app.get("/resubscribe", resubscribeByEmail);
 
 app.use("/api/email", emailRoutes);
 
